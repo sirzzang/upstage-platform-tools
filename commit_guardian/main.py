@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from commit_guardian.guardian_agent import GuardianAgent
+from commit_guardian.git_tools import get_diff, get_commit_log
 
 
 HELP_TEXT = """
@@ -15,7 +16,9 @@ HELP_TEXT = """
   staged                   - staged 변경사항 리뷰
   commit <hash>            - 특정 커밋 리뷰
   release                  - 릴리스 노트 생성 (한/영)
-  test                     - 변경사항에 대한 테스트 제안
+  test                     - 변경사항에 대한 테스트 제안 (변경 없으면 최근 커밋)
+  test staged              - staged 변경사항에 대한 테스트 제안
+  test <hash>              - 특정 커밋에 대한 테스트 제안
   help                     - 도움말 표시
   clear                    - 대화 초기화
   quit                     - 종료
@@ -100,8 +103,31 @@ def main():
             question = f"{repo_path} 저장소의 커밋 {commit_hash}을 코드 리뷰해주세요. 발견사항은 반드시 groundedness 검증을 해주세요."
         elif line.lower() == "release":
             question = f"{repo_path} 저장소의 변경사항으로 릴리스 노트를 한국어와 영어 모두 생성해주세요."
-        elif line.lower() == "test":
-            question = f"{repo_path} 저장소의 변경사항에 대한 테스트 케이스를 제안해주세요."
+        elif line.lower().startswith("test"):
+            test_arg = line[4:].strip().lower()
+            if test_arg == "staged":
+                mode, commit_hash = "staged", None
+            elif test_arg:
+                mode, commit_hash = "commit", test_arg
+            else:
+                mode, commit_hash = "unstaged", None
+
+            # fallback: unstaged/staged 변경사항이 없으면 최근 커밋으로 전환
+            if mode != "commit":
+                diff_result = get_diff(repo_path, mode)
+                if diff_result == "(변경 사항 없음)":
+                    log = get_commit_log(repo_path, count=1)
+                    if log and not log.startswith("["):
+                        commit_hash = log.split()[0]
+                        mode = "commit"
+                        print(f"[{mode}] 변경사항 없음 → 최근 커밋 {commit_hash}으로 전환\n")
+
+            if mode == "commit" and commit_hash:
+                question = f"{repo_path} 저장소의 커밋 {commit_hash}의 변경사항에 대한 테스트 케이스를 제안해주세요."
+            elif mode == "staged":
+                question = f"{repo_path} 저장소의 staged 변경사항에 대한 테스트 케이스를 제안해주세요."
+            else:
+                question = f"{repo_path} 저장소의 unstaged 변경사항에 대한 테스트 케이스를 제안해주세요."
         else:
             question = line
             if repo_path not in question:
