@@ -1,10 +1,20 @@
-"""API 사용량 추적 및 비용 계산 모듈.
+"""API 사용량 추적 및 비용 추정 모듈.
 
-Upstage API 응답의 usage 필드를 누적 추적하고,
-호출당 / 세션 누적 토큰 수와 예상 비용을 표시합니다.
+Upstage API 응답의 usage 필드(토큰 수)를 누적 추적하고,
+호출당 / 세션 누적 토큰 수와 *예상* 비용을 표시합니다.
+
+주의사항:
+  - 토큰 수: API 응답의 usage 필드 기반이므로 정확합니다.
+  - 비용 추정: 아래 단가표는 작성 시점 기준이며, Upstage의 가격 변경 시
+    실제 대시보드 차감액과 다를 수 있습니다.
+  - 정확한 사용량과 비용은 반드시 Upstage 대시보드에서 확인하세요:
+    https://console.upstage.ai/billing
+  - 이 기능은 --usage 플래그로 활성화할 수 있습니다 (기본: 비활성).
 """
 
-# Upstage API 가격표 (2025년 기준, USD per 1M tokens)
+# Upstage API 가격표 (2026-02 기준, USD per 1M tokens)
+# 출처: https://www.upstage.ai/pricing/api
+# 실제 단가와 다를 수 있음 — 참고용
 PRICING = {
     # Chat / Function Calling / Groundedness Check
     "solar-pro3": {"input": 0.15, "output": 0.60},
@@ -26,9 +36,14 @@ DOC_PRICING = {
 
 
 class UsageTracker:
-    """API 사용량 누적 추적기."""
+    """API 사용량 누적 추적기.
 
-    def __init__(self):
+    enabled=False이면 추적을 건너뜁니다 (기본: False).
+    --usage 플래그로 활성화할 수 있습니다.
+    """
+
+    def __init__(self, enabled: bool = False):
+        self.enabled = enabled
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_embedding_tokens = 0
@@ -42,6 +57,8 @@ class UsageTracker:
         Returns:
             {"input": int, "output": int, "cost": float} 또는 None
         """
+        if not self.enabled:
+            return None
         usage = getattr(response, "usage", None)
         if not usage:
             return None
@@ -65,6 +82,8 @@ class UsageTracker:
 
     def track_embedding(self, response, model: str = "embedding-passage") -> dict | None:
         """Embeddings 응답의 usage를 추적합니다."""
+        if not self.enabled:
+            return None
         usage = getattr(response, "usage", None)
         if not usage:
             return None
@@ -79,8 +98,10 @@ class UsageTracker:
 
         return {"tokens": tokens, "cost": cost}
 
-    def track_doc(self, model: str, pages: int = 1) -> dict:
+    def track_doc(self, model: str, pages: int = 1) -> dict | None:
         """Document AI 호출을 추적합니다."""
+        if not self.enabled:
+            return None
         price_per_page = DOC_PRICING.get(model, 0.01)
         cost = pages * price_per_page
 
@@ -118,9 +139,15 @@ class UsageTracker:
 
 
 def print_usage(tracker: UsageTracker, last_info: dict | None):
-    """사용량을 출력합니다 (마지막 호출 + 세션 누적)."""
+    """사용량을 출력합니다 (마지막 호출 + 세션 누적).
+
+    tracker.enabled가 False이면 아무것도 출력하지 않습니다.
+    """
+    if not tracker.enabled:
+        return
+    print()
     last = tracker.format_last(last_info)
     session = tracker.format_session()
     if last:
-        print(f"  {last}")
-    print(f"  {session}")
+        print(last)
+    print(session)
