@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from common.client import client
 from common.usage import UsageTracker, print_usage
 from k8s_assistant.yaml_tools import (
+    analyze_repo,
     analyze_yaml,
     generate_yaml,
     validate_yaml,
@@ -15,6 +16,23 @@ from k8s_assistant.yaml_tools import (
 )
 
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_repo",
+            "description": "레포지토리의 Dockerfile, docker-compose, 환경변수, 소스 코드 엔트리포인트 등을 분석하여 K8s 배포에 필요한 정보(이미지, 포트, 환경변수, 의존 서비스 등)를 추출합니다. 사용자가 레포지토리 경로를 제공하면 반드시 이 도구를 먼저 호출하세요.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_path": {
+                        "type": "string",
+                        "description": "분석할 레포지토리의 로컬 경로 (절대 경로 또는 상대 경로)",
+                    }
+                },
+                "required": ["repo_path"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -133,6 +151,7 @@ TOOLS = [
 SYSTEM_PROMPT = """당신은 Kubernetes YAML 전문가입니다. 사용자의 요청에 따라 K8s 매니페스트를 분석, 생성, 검증, 비교합니다.
 
 역할:
+- 레포 분석: 레포지토리의 Dockerfile, 소스 코드, 환경변수를 분석하여 K8s 배포에 필요한 정보를 추출
 - YAML 분석: 리소스 종류, 메타데이터, 주요 스펙, 실제 동작을 쉽게 설명
 - YAML 생성: 프로덕션 품질의 매니페스트 생성 (리소스 제한, 헬스체크, 보안 컨텍스트 포함)
 - 베스트 프랙티스 검증: 보안, 안정성, 리소스 관리 관점에서 문제점과 개선안 제시
@@ -141,6 +160,9 @@ SYSTEM_PROMPT = """당신은 Kubernetes YAML 전문가입니다. 사용자의 �
 
 규칙:
 - 항상 적절한 도구(function)를 호출하여 작업하세요.
+- 사용자가 레포지토리 경로를 제공하면 반드시 analyze_repo를 먼저 호출하여 Dockerfile, 환경변수, 포트, 헬스체크 엔드포인트 등을 확인한 뒤 매니페스트를 생성하세요.
+- 레포 분석 결과를 기반으로 YAML을 생성할 때, Dockerfile의 EXPOSE 포트, 소스 코드의 환경변수, 실제 존재하는 엔드포인트를 정확히 반영하세요.
+- 환경변수 중 비밀번호, API 키 등 민감 정보는 Secret으로, 나머지는 ConfigMap으로 분리하세요.
 - YAML 생성 시 반드시 포함: metadata.labels, resources.requests/limits, securityContext
 - 생성된 YAML은 apiVersion, kind, metadata, spec 구조를 갖추세요.
 - 검증 시 심각도를 [CRITICAL], [WARNING], [INFO] 로 구분하세요.
@@ -157,6 +179,7 @@ SYSTEM_PROMPT = """당신은 Kubernetes YAML 전문가입니다. 사용자의 �
 """
 
 TOOL_HANDLERS = {
+    "analyze_repo": lambda args: analyze_repo(args["repo_path"]),
     "analyze_yaml": lambda args: analyze_yaml(args["yaml_content"]),
     "generate_yaml": lambda args: generate_yaml(
         args["requirement"], args.get("resource_types")
@@ -171,6 +194,7 @@ TOOL_HANDLERS = {
 }
 
 TOOL_LABELS = {
+    "analyze_repo": "레포 분석",
     "analyze_yaml": "YAML 분석",
     "generate_yaml": "YAML 생성",
     "validate_yaml": "YAML 검증",
