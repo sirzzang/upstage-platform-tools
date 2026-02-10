@@ -1,7 +1,22 @@
+"""테스트용 샘플 마크다운 문서 모듈.
+
+플랫폼 엔지니어링 시나리오에 맞는 3종의 마크다운 문서를 제공한다:
+  1. Runbook — K8s CrashLoopBackOff 트러블슈팅 절차
+  2. Post-Mortem — 프로덕션 DB 장애 사후 분석 보고서
+  3. Architecture — 이커머스 마이크로서비스 아키텍처 설계 문서
+
+이 문서들은 embedding_tools.py의 청킹 로직이 ## 헤딩 기준으로
+섹션을 분할하도록 설계되어 있으므로, 모두 ## 헤딩을 포함하는
+마크다운 구조로 작성되어 있다.
+"""
+
 import os
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), "samples")
 
+# ── 샘플 1: Kubernetes Runbook ──────────────────────────────
+# CrashLoopBackOff 상태의 Pod를 진단하고 해결하는 절차서.
+# 섹션: Overview, Symptoms, Diagnosis Steps, Common Causes, Escalation, Post-Resolution
 RUNBOOK_K8S = """# Runbook: Kubernetes Pod CrashLoopBackOff Troubleshooting
 
 ## Overview
@@ -88,6 +103,9 @@ Escalate to SRE Lead if:
 - Schedule post-mortem if customer impact exceeded 15 minutes
 """
 
+# ── 샘플 2: DB 장애 포스트모템 ──────────────────────────────
+# 프로덕션 PostgreSQL 장애(84분) 사후 분석 보고서.
+# 섹션: Incident Summary, Timeline, Root Cause Analysis, Impact, Action Items, Lessons Learned
 POSTMORTEM_DB = """# Post-Mortem: Production Database Outage (2024-11-15)
 
 ## Incident Summary
@@ -158,6 +176,10 @@ Contributing factors:
 5. Need automated runbook for database connection pool alerts
 """
 
+# ── 샘플 3: 마이크로서비스 아키텍처 문서 ─────────────────────
+# 이커머스 플랫폼의 12개 서비스 구성, 통신 패턴, DB 전략, 모니터링 스택, 배포 전략.
+# 섹션: System Overview, Service Catalog, Communication Patterns, Database Strategy,
+#        Monitoring Stack, Deployment Strategy
 ARCHITECTURE_MICROSERVICES = """# Architecture Document: E-Commerce Microservices Platform
 
 ## System Overview
@@ -248,9 +270,14 @@ Each service owns its database. No direct cross-service database access.
 
 
 def generate_all_samples() -> list[str]:
-    """모든 샘플 마크다운 문서를 생성합니다."""
+    """모든 샘플 마크다운 문서를 samples/ 디렉토리에 파일로 생성한다.
+
+    Returns:
+        생성된 파일들의 절대 경로 리스트
+    """
     os.makedirs(SAMPLES_DIR, exist_ok=True)
 
+    # (파일명, 문서 내용) 튜플 리스트
     samples = [
         ("runbook_k8s_troubleshoot.md", RUNBOOK_K8S),
         ("postmortem_db_outage.md", POSTMORTEM_DB),
